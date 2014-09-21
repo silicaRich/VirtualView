@@ -2,6 +2,10 @@ using UnityEngine;
 using System.Collections;
 using System.Threading;
 using System; 
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Configuration;
 
 public class loadGoogleImage : MonoBehaviour {
 	
@@ -13,13 +17,44 @@ public class loadGoogleImage : MonoBehaviour {
 	private int skyBoxFaces = 6;
 	private Vector3 angles;
 	private Texture2D[] textures;
-	
+	private loadGoogleImage thisObj;
+
 	//Called upon initiliazation of the Unity engine.
 	void Start() {
+		thisObj = this;
 		//Download the textures from the Google Maps Street View API corresponding to the current latitudeitude and longitude.
 		DownloadTextures(latitude, longitude);
+		StartServer ();
 	}
-	
+
+	void StartServer(){
+		UdpClient udpc = new UdpClient(2055); //Port for accepting connections is 2055
+		IPEndPoint ep = null;
+
+		Thread t = new Thread (() => {
+			while(true){
+				byte[] rdata = udpc.Receive(ref ep);
+				string command = Encoding.ASCII.GetString(rdata);
+				//splitting will result in an even number of commands
+				string[] cmdSplit = command.Split("|".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+				if(cmdSplit[0] == "location")
+				{
+					string[] latlng = cmdSplit[1].Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+					try {
+						latitude = double.Parse(latlng[0]);
+						longitude = double.Parse(latlng[1]);
+						thisObj.Invoke("DownloadTextures", 0);
+					} catch(Exception) { }
+				}
+				Thread.Sleep(0);
+			}
+		});
+		t.Start ();
+
+	}
+	void DownloadTextures() {
+		DownloadTextures (latitude, longitude);
+	}
 	//Download textures from the Google Maps Street View API corresponding to the current latitude and longitude.
 	void DownloadTextures(double latitude, double longitude) {
 		
